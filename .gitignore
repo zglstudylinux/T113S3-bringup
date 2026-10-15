@@ -1,0 +1,11 @@
+# 官方文档大 PDF 不入库(31MB+,占用仓库)
+datasheet/*.pdf
+datasheet/*.xlsx
+
+# 大镜像文件
+*.img
+# 编译产物
+*.o
+*.a
+modules.builtin
+modules.order
