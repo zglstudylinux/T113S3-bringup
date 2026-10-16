@@ -29,36 +29,248 @@
 6. **开机 DSI 半初始化**:`disp_display.c` 补丁在 late_initcall 3 秒后做一轮 disable+enable,治每次开机 `fps < ref_fps`。
 7. **fb 半屏**:`dev_fb.c` 补丁强制 layer 全屏几何(screen_win=480×640)+ addr=fb 缓冲,治 `screen_win=280x1424/addr=0` 残留。
 
-## 3. 修改文件清单
+## 3. 修改文件清单(逐文件 diff)
 
-### 3.1 内核新增(3 个)
+### 3.1 内核新增(3 个文件)
 
-| 文件 | 内容 |
-|---|---|
-| `kernel/linux-5.4/drivers/video/fbdev/sunxi/disp2/disp/lcd/st7701sn_d240n2501v1.c` | 面板驱动:open_flow(power_on→panel_init→tcon_enable→bl_open),44 条 DCS init(哨兵 0xFE/0xFC 避开 0xFF bank-switch),PD20 复位时序(高→低→高,间隔 5/10/120ms),完成后写 `/tmp/st7701sn_init` 验证标记 |
-| `.../lcd/fl7707n_mipi.c` `.h` | 旧屏(280×1424 FL7707N)驱动残留,config 已关不编译,被注册文件引用保持自洽 |
+**① `kernel/linux-5.4/drivers/video/fbdev/sunxi/disp2/disp/lcd/st7701sn_d240n2501v1.c`(新文件,294 行)**
 
-### 3.2 内核修改(5 个)
+面板驱动核心结构(完整文件见 patch):
 
-| 文件 | 改动 |
-|---|---|
-| `.../disp/lcd/panels.c` | panel_array 注册 `&st7701sn_d240n2501v1_panel`(+fl7707n) |
-| `.../disp/lcd/panels.h` | 加对应 extern 声明 |
-| `.../disp/lcd/Kconfig` | 加 `config LCD_SUPPORT_ST7701SN_D240N2501V1` |
-| `.../disp/Makefile` | 加 `disp-$(CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1) += lcd/st7701sn_d240n2501v1.o` |
-| `.../disp/de/disp_display.c` | **必交**:late_initcall 3 秒后延迟 disable+enable(治开机 DSI 半初始化) |
-| `.../disp/dev_fb.c` | **必交**:强制 fb 层全屏几何 + addr=fb 缓冲(治半屏) |
-| `.../disp/de/disp_lcd.c` | 1 条 [LCD-DBG] 调试打印 |
+```c
+/* 复位: 走 disp2 的 lcd_gpio_0(dts 里指向 PD20), 低有效 */
+#define panel_reset(sel, val) sunxi_lcd_gpio_set_value(sel, 0, val)
 
-### 3.3 板级
+static s32 lcd_open_flow(u32 sel)
+{
+	LCD_OPEN_FUNC(sel, lcd_power_on, 100);     /* 上电 + PD20 复位时序(高→低→高, 5/10/120ms) */
+	LCD_OPEN_FUNC(sel, lcd_panel_init, 120);   /* 44 条 DCS init 命令 + 5 个延时 */
+	LCD_OPEN_FUNC(sel, sunxi_lcd_tcon_enable, 120);
+	LCD_OPEN_FUNC(sel, lcd_bl_open, 0);        /* PWM7 + 背光使能 */
+	return 0;
+}
+```
 
-| 文件 | 改动 |
-|---|---|
-| `device/config/chips/t113/configs/zgl_board/linux-5.4/board.dts` | `&lcd0` 切新屏:`lcd_driver_name="st7701sn_d240n2501v1"`、`lcd_dclk_freq=<28>`、`lcd_ht=<508>`、`lcd_hbp=<18>`、`lcd_hspw=<8>`、`lcd_vt=<850>`、`lcd_vbp=<62>`、`lcd_dsi_lane=<2>`、`lcd_dsi_if=<0>`、`lcd_pwm_ch=<7>`、`lcd_gpio_0=<&pio PD 20 GPIO_ACTIVE_LOW>`、`pinctrl-0=<&dsi2lane_pins_a>`;`&disp` 的 `fb0_width=<480>`/`fb0_height=<640`;新增 `backlight` 节点(pwm-backlight,pwms=<&pwm 7 10000 0>);twi3 保持 disabled(UART3 让路) |
-| `device/config/chips/t113/configs/zgl_board/uboot-board.dts` | `lcd_used=<0>` + lcd0 参数同步新屏(U-Boot 不驱动面板,但注入 boot_disp 的参数必须与内核一致) |
-| `device/config/chips/t113/configs/zgl_board/linux-5.4/config-5.4` | 加 `CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1=y`、`CONFIG_BACKLIGHT_CLASS_DEVICE=y`、`CONFIG_BACKLIGHT_PWM=y`、`CONFIG_BACKLIGHT_GPIO=y` |
+init 序列写完驱动会写验证标记(测试用):
 
-说明:board.dts 里触摸(`dxts@38`)、`rfkill`、`&uart1` 在本阶段**暂禁用**(注释标注 phase-3/4/5 启用),保持每阶段最小风险面。
+```c
+/* 在 lcd_panel_init 尾部 */
+{
+	struct file *fp = filp_open("/tmp/st7701sn_init", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+	if (!IS_ERR(fp)) {
+		snprintf(buf, sizeof(buf), "OK %d cmds %d delays\n", cmd_cnt, delay_cnt);
+		kernel_write(fp, buf, strlen(buf), &pos);
+		filp_close(fp, NULL);
+	}
+}
+```
+
+**② `.../lcd/fl7707n_mipi.c` + `fl7707n_mipi.h`(新文件,旧屏驱动残留)**
+
+配置默认关(`CONFIG_LCD_SUPPORT_FL7707N_MIPI is not set`),不参与编译;但被下面 panels.c/panels.h 的注册块引用,交付保证自洽。可整文件复制。
+
+### 3.2 内核修改(5 个文件,diff)
+
+**① `.../disp/lcd/panels.c`** — 注册面板到 panel_array:
+
+```diff
+@@ -132,6 +132,12 @@ struct __lcd_panel *panel_array[] = {
+ #endif
++#ifdef CONFIG_LCD_SUPPORT_FL7707N_MIPI
++	&fl7707n_mipi_panel,
++#endif
++#ifdef CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1
++	&st7701sn_d240n2501v1_panel,
++#endif
+```
+
+**② `.../disp/lcd/panels.h`** — extern 声明(同位置):
+
+```diff
++#ifdef CONFIG_LCD_SUPPORT_FL7707N_MIPI
++extern struct __lcd_panel fl7707n_mipi_panel;
++#endif
++#ifdef CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1
++extern struct __lcd_panel st7701sn_d240n2501v1_panel;
++#endif
+```
+
+**③ `.../disp/lcd/Kconfig`** — 文件末尾追加:
+
+```diff
+@@ -222,3 +222,15 @@
++
++config LCD_SUPPORT_FL7707N_MIPI
++	bool "LCD support fl7707n_mipi panel"
++	default n
++	help
++		If you want to support fl7707n_mipi panel for display driver, select it.
++
++config LCD_SUPPORT_ST7701SN_D240N2501V1
++	bool "LCD support st7701sn_d240n2501v1 panel (DX 2.4\" 480x640 IPS, ST7701SN, 2-lane MIPI)"
++	default n
++	help
++		If you want to support D240N2501V1 panel for display driver, select it.
+```
+
+**④ `.../disp/Makefile`** — 在 NT35510/B080UAN01 行后插入:
+
+```diff
+@@ -67,6 +67,8 @@
+ disp-$(CONFIG_LCD_SUPPORT_B080UAN01_MIPI1200X1920) += lcd/b080uan01_mipi1200x1920.o
++disp-$(CONFIG_LCD_SUPPORT_FL7707N_MIPI) += lcd/fl7707n_mipi.o
++disp-$(CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1) += lcd/st7701sn_d240n2501v1.o
+ disp-y += lcd/super_lcd_driver.o
+```
+
+**⑤ `.../disp/de/disp_display.c`** — 显示修复(必交,41 行)。在文件尾新增:
+
+```diff
++#include <linux/workqueue.h>
++
++/*
++ * The boot-time LCD enable (start_work at probe) leaves the DSI in a
++ * half-configured state (fps < ref, TCON error counter climbing), and a
++ * later manual "disable; enable" via dispdbg always fixes it.  So after
++ * the system has settled, do the same disable+enable cycle ourselves.
++ */
++static void sunxi_disp_reinit_work(struct work_struct *work)
++{
++	u32 num_screens = bsp_disp_feat_get_num_screens();
++	u32 disp;
++
++	pr_info("[DISP] sunxi_disp_reinit_work: re-enabling LCDs\n");
++	for (disp = 0; disp < num_screens; disp++) {
++		struct disp_device *lcd = disp_get_lcd(disp);
++		if (!lcd)
++			continue;
++		if (lcd->is_enabled && lcd->is_enabled(lcd) && lcd->disable)
++			lcd->disable(lcd);
++		if (lcd->enable)
++			lcd->enable(lcd);
++	}
++}
++static DECLARE_DELAYED_WORK(sunxi_disp_reinit_work_item,
++			    sunxi_disp_reinit_work);
++
++static int __init sunxi_disp_late_init(void)
++{
++	pr_info("[DISP] sunxi_disp_late_init: schedule LCD re-init in 3s\n");
++	schedule_delayed_work(&sunxi_disp_reinit_work_item,
++			      msecs_to_jiffies(3000));
++	return 0;
++}
++late_initcall(sunxi_disp_late_init);
+```
+
+**⑥ `.../disp/dev_fb.c`** — 强制全屏几何(必交,28 行)。两处:
+
+`pan_display` 路径(~行 721):
+
+```diff
++			/* zgl: 强制层为全屏几何, 修复 screen_win=280x1424 / addr=0 */
++			config.info.screen_win.x = 0;
++			config.info.screen_win.y = 0;
++			config.info.screen_win.width =
++			    config.info.fb.crop.width >> 32;
++			config.info.screen_win.height =
++			    config.info.fb.crop.height >> 32;
++			if (info->fix.smem_start)
++				config.info.fb.addr[0] =
++				    (unsigned long long)info->fix.smem_start;
+```
+
+`display_fb_request` 路径(~行 2155):
+
+```diff
++			/* zgl: 强制层为全屏 fb 几何, 修复 screen_win 被错误设置(280x1424) */
++			config.info.screen_win.width = src_width;
++			config.info.screen_win.height = src_height;
+```
+
+### 3.3 板级 diff
+
+**① `device/config/chips/t113/configs/zgl_board/linux-5.4/board.dts`** — `&lcd0` 关键字段(旧值→新值):
+
+```diff
+-    lcd_driver_name     = "st7701sn";           ← 内核无此名字的驱动
+-    lcd_dclk_freq       = <21>;                  ← 低于 DSI PHY 下限 28MHz, 屏只亮背光
+-    lcd_ht              = <502>;
+-    lcd_hspw            = <2>;                   ← <4 时 dsi_hsa 为负
+-    lcd_vt              = <702>;
+-    lcd_vbp             = <30>;
+-    lcd_gpio_0          = "PD20";                ← 字符串形式, 不解析 active 低
++    lcd_driver_name     = "st7701sn_d240n2501v1"; /* 与 panels.c 注册名一致 */
++    lcd_dclk_freq       = <28>;    /* ≥28MHz: DSI PHY 每 lane ≥325Mbps (28*24/2=336) */
++    lcd_ht              = <508>;   /* 480 + hfp10 + hspw8 + hbp后廊10 */
++    lcd_hbp             = <18>;    /* hspw(8) + 后廊(10) */
++    lcd_hspw            = <8>;     /* ≥4 */
++    lcd_vt              = <850>;   /* 刷新率≈65Hz, 给 DSI 带宽余量 */
++    lcd_vbp             = <62>;    /* vspw(2)+后廊(60), 治顶部花屏 */
++    lcd_vspw            = <2>;
++    lcd_gpio_0 = <&pio PD 20 GPIO_ACTIVE_LOW>;  /* LCD 复位, 低有效 */
+     pinctrl-0 = <&dsi2lane_pins_a>;
+     pinctrl-1 = <&dsi2lane_pins_b>;
+```
+
+`&disp` fb 尺寸:
+
+```diff
+-    fb0_width                = <1024>;
+-    fb0_height               = <600>;
++    fb0_width                = <480>;  /* 匹配 D240N2501V1 */
++    fb0_height               = <640>;
+```
+
+新增 backlight 节点(根节点下):
+
+```diff
++	backlight: backlight {
++		compatible = "pwm-backlight";
++		pwms = <&pwm 7 10000 0>;
++		pwm-names = "backlight";
++		brightness-levels = < 0 1 2 ... 254 255 >;   /* 256 级, 见 patch 全文 */
++		default-brightness-level = <100>;
++		status = "okay";
++	};
+```
+
+**② `device/config/chips/t113/configs/zgl_board/uboot-board.dts`** — U-Boot 侧同步(U-Boot 不驱动面板但会注入 boot_disp):
+
+```diff
+-	lcd_used            = <1>;
+-	lcd_driver_name     = "default_lcd";
+-	lcd_if              = <3>;            ← LVDS 旧屏
+-	lcd_x               = <1024>;
+-	lcd_y               = <600>;
+-	lcd_dclk_freq       = <52>;
++	lcd_used            = <0>;			/* 禁用 U-Boot LCD 初始化; 新屏驱动在 kernel 内 */
++	lcd_driver_name     = "st7701sn_d240n2501v1";	/* 占位 (lcd_used=0 不查找面板表) */
++	lcd_if              = <4>;			/* 0:rgb 4:dsi */
++	lcd_x               = <480>;
++	lcd_y               = <640>;
++	lcd_dclk_freq       = <28>;
++	lcd_ht              = <508>;
++	lcd_hspw            = <8>;
++	lcd_vbp             = <62>;
++	lcd_vt              = <850>;
++	lcd_dsi_lane        = <2>;
++	lcd_dsi_if          = <0>;
++	lcd_dsi_format      = <0>;
+```
+
+**③ `device/config/chips/t113/configs/zgl_board/linux-5.4/config-5.4`** — 文件末尾追加:
+
+```diff
+@@ -298,3 +298,9 @@
+ CONFIG_EARLY_PRINTK=y
++
++# zgl_board MIPI panel (D240N2501V1 / ST7701SN)
++CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1=y
++CONFIG_BACKLIGHT_CLASS_DEVICE=y
++CONFIG_BACKLIGHT_PWM=y
++CONFIG_BACKLIGHT_GPIO=y
+```
 
 ## 4. 编译打包
 
