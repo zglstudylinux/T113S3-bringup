@@ -149,21 +149,58 @@ cat /proc/cmdline          # 应含 console=ttyS3,115200 earlycon=uart8250,mmio3
 dmesg | grep -E 'ttyS|sunxi-uart'   # 应见 uart3 注册(0x02500c00)
 ```
 
-### 4.4 adb 验证(同一镜像)
+### 4.4 adb 验证(同一镜像, 2026-10-15 实测)
 
 目标板 adbd 已在 rootfs(CONFIG_PACKAGE_adbd=y,rc.local 经 load_script.conf 自启)。
 
+主机端准备(VMware 虚拟机需先把板子 USB 接进虚拟机;宿主是 Linux 时装 udev 规则):
+
 ```bash
-adb devices       # 应列出设备
-adb shell cat /proc/cmdline
+# /etc/udev/rules.d/51-android.rules (Tina ADB 的 VID=1f3a; 标准 adb=18d1)
+SUBSYSTEM=="usb", ATTR{idVendor}=="1f3a", MODE="0666", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", MODE="0666", GROUP="plugdev"
+# 然后: sudo udevadm control --reload && sudo udevadm trigger && adb kill-server
 ```
 
-### 4.5 完成判据
+实测(`adb devices` → `20080411  device`):
 
-- [ ] 串口看到 BOOT0 → SBOOT → U-Boot → kernel → shell 全链路日志
-- [ ] `/proc/cmdline` 含 `console=ttyS3,115200`
-- [ ] 之前如果接 PG8/PG9(PG 口的 UART1)能看到过输出,现在应消失(那些脚让给 WiFi/BT 模块)
-- [ ] `adb devices` 能列出设备
+```text
+$ adb shell cat /proc/cmdline
+earlyprintk=uart8250,mmio32,0x02500c00 clk_ignore_unused initcall_debug=0 \
+console=ttyS3,115200 loglevel=8 root=/dev/mmcblk0p5 init=/init rdinit=/rdinit \
+partitions=boot-resource@mmcblk0p1:env@mmcblk0p2:env-redund@mmcblk0p3:boot@mmcblk0p4:\
+rootfs@mmcblk0p5:rootfs_data@mmcblk0p6:private@mmcblk0p7:UDISK@mmcblk0p8 \
+cma=4M ... androidboot.hardware=sun8iw20p1 boot_type=1 ... \
+uboot_message=2018.07-gce06dac(03/15/2025-06:33:14) ... androidboot.dramsize=128
+
+$ adb shell uname -a
+Linux TinaLinux 5.4.61 #4 SMP PREEMPT Thu Oct 15 20:09:31 CST 2026 armv7l GNU/Linux
+$ adb shell cat /etc/openwrt_release
+DISTRIB_ID='OpenWrt'
+DISTRIB_RELEASE='21.02-SNAPSHOT'
+```
+
+要点:
+- `console=ttyS3,115200` 与 `earlycon 0x02500c00`(UART3 基址)均在 cmdline 中 ✓
+- 烧录方式: **TF 卡**(全志 TF 卡烧写工具)。注意 `boot_type=1`(SD 卡启动);此前用 PhoenixSuit 烧写时因介质不符出现 `spinand read id failed` 复位,属烧写工具/介质选择问题,镜像本身无误
+
+### 4.5 烧写工具选择(踩坑记录)
+
+| 工具 | 适用 |
+|---|---|
+| **全志 TF 卡烧写工具**(PhoenixCard 类) | TF 卡启动(本板当前方式, `boot_type=1`)✓ |
+| PhoenixSuit | 烧写 spi-nand/eMMC 整机镜像(`boot_type=0`) |
+
+用 PhoenixSuit 烧出的镜像写到 TF 卡时,boot0 按错误介质初始化,启动中段报
+`MMC init failed → try emmc fail → sunxi-spinand read id failed : -110 → try nand fail → initcall sequence failed → RESET`。
+**TF 卡启动务必用 TF 卡烧写工具**。
+
+### 4.6 完成判据(2026-10-15 实测全部通过)
+
+- [x] 串口看到 BOOT0 → SBOOT → U-Boot → kernel → shell 全链路日志(用户实测)
+- [x] `/proc/cmdline` 含 `console=ttyS3,115200` + earlycon 0x02500c00(adb 实测)
+- [x] PG8/PG9 无调试输出(那些脚让给 WiFi/BT 模块)
+- [x] `adb devices` 列出设备 `20080411`
 
 ## 5. 涉及文件
 
