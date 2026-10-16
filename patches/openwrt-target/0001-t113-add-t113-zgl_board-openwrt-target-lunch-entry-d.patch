@@ -1,7 +1,7 @@
 From 55a9282a6affcb928dd4f4c4bd38950b8acf30de Mon Sep 17 00:00:00 2001
 From: zglstudylinux <zglstudylinux@users.noreply.github.com>
 Date: Fri, 16 Oct 2026 11:03:18 +0800
-Subject: [PATCH] t113: add t113-zgl_board openwrt target (lunch entry +
+Subject: [PATCH 1/2] t113: add t113-zgl_board openwrt target (lunch entry +
  defconfig)
 
 - vendorsetup.sh: add_lunch_combo t113-zgl_board

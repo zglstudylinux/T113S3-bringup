@@ -1,7 +1,8 @@
 From 5a82c83950cec4d0ee2297c1d2154a40fad76aea Mon Sep 17 00:00:00 2001
 From: zglstudylinux <zglstudylinux@users.noreply.github.com>
 Date: Thu, 15 Oct 2026 15:51:40 +0800
-Subject: [PATCH] t113: add zgl_board BSP with UART3 debug console on PB6/PB7
+Subject: [PATCH 1/4] t113: add zgl_board BSP with UART3 debug console on
+ PB6/PB7
 
 - zgl_board BSP based on evb1_auto (board.dts, config-5.4, env.cfg,
   sys_config.fex, partitions, bootlogo, amp_dsp0)

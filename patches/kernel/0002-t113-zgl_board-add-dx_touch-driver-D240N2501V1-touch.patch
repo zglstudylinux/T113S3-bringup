@@ -1,8 +1,8 @@
 From 524d621f0f43fe117147460574151a9c10f23a9d Mon Sep 17 00:00:00 2001
 From: zglstudylinux <zglstudylinux@users.noreply.github.com>
 Date: Fri, 16 Oct 2026 11:02:47 +0800
-Subject: [PATCH] t113: zgl_board add dx_touch driver (D240N2501V1 touch, I2C
- 0x38)
+Subject: [PATCH 2/3] t113: zgl_board add dx_touch driver (D240N2501V1 touch,
+ I2C 0x38)
 
 Screen-vendor FT5x06-style touch IC on TWI1 (PE0/PE1), RST=PE4,
 INT=PE5, 480x640 with X mirrored in driver (480-x).

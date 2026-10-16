@@ -1,7 +1,7 @@
 From 14a281d6d7dcd4fd67934a14682b3a463e983797 Mon Sep 17 00:00:00 2001
 From: zglstudylinux <zglstudylinux@users.noreply.github.com>
 Date: Fri, 16 Oct 2026 11:02:59 +0800
-Subject: [PATCH] t113: zgl_board enable dx_touch node (phase-3)
+Subject: [PATCH 3/4] t113: zgl_board enable dx_touch node (phase-3)
 
 dxts@38 status disabled -> okay. Property names match the driver
 (touch-gpio / reset-gpio, not interrupts / reset-gpios).

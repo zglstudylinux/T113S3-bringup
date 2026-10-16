@@ -1,0 +1,43 @@
+From a926f882d35f4206da8dfde5e4ad9c8a1976807f Mon Sep 17 00:00:00 2001
+From: zglstudylinux <zglstudylinux@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 14:41:30 +0800
+Subject: [PATCH 4/4] t113: zgl_board enable rfkill and switch WLAN to
+ RTL8723DS
+
+- board.dts: rfkill@0 status disabled -> okay (wlan@0 busnum=1, module
+  always powered: no regon/hostwake GPIO, no 32k fanout clock)
+- config-5.4: CONFIG_XR829_WLAN=m -> CONFIG_RTL8723DS=m
+---
+ configs/zgl_board/linux-5.4/board.dts  | 2 +-
+ configs/zgl_board/linux-5.4/config-5.4 | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/configs/zgl_board/linux-5.4/board.dts b/configs/zgl_board/linux-5.4/board.dts
+index 81cc017..7fa7d7a 100644
+--- a/configs/zgl_board/linux-5.4/board.dts
++++ b/configs/zgl_board/linux-5.4/board.dts
+@@ -1095,7 +1095,7 @@
+ 		compatible    = "allwinner,sunxi-rfkill";
+ 		chip_en;
+ 		power_en;
+-		status        = "disabled";   /* phase-4 (WiFi) will enable */
++		status        = "okay";
+ 		/* No pinctrl-0 here: it created a devlink dependency on the pinctrl
+ 		 * driver that could defer the probe indefinitely (device never
+ 		 * attached at boot). PG11(32K) is not wired on this board anyway. */
+diff --git a/configs/zgl_board/linux-5.4/config-5.4 b/configs/zgl_board/linux-5.4/config-5.4
+index 15a7a0a..3cf375d 100644
+--- a/configs/zgl_board/linux-5.4/config-5.4
++++ b/configs/zgl_board/linux-5.4/config-5.4
+@@ -96,7 +96,7 @@ CONFIG_BLK_DEV_SD=y
+ CONFIG_NETDEVICES=y
+ CONFIG_SUNXI_GMAC=y
+ CONFIG_USB_USBNET=y
+-CONFIG_XR829_WLAN=m
++CONFIG_RTL8723DS=m
+ CONFIG_INPUT_EVDEV=y
+ CONFIG_INPUT_SENSORINIT=y
+ CONFIG_KEYBOARD_SUNXI=y
+-- 
+2.43.0
+

@@ -1,8 +1,8 @@
 From e02b44739c03a7c4cad9d4fb8804ef6b3bb4f45e Mon Sep 17 00:00:00 2001
 From: zglstudylinux <zglstudylinux@users.noreply.github.com>
 Date: Fri, 16 Oct 2026 09:33:21 +0800
-Subject: [PATCH] t113: zgl_board switch lcd0 to D240N2501V1 (ST7701SN) MIPI
- panel
+Subject: [PATCH 2/4] t113: zgl_board switch lcd0 to D240N2501V1 (ST7701SN)
+ MIPI panel
 
 - board.dts lcd0: st7701sn_d240n2501v1, dclk 28MHz (DSI PHY floor),
   ht 508 / vt 850 (65Hz), 2-lane video mode, PD20 reset, PWM7 backlight;
