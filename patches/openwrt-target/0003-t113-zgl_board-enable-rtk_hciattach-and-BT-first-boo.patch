@@ -1,0 +1,75 @@
+From b7f2ae5bc2880ac279a6496767a8c8dcf4e2a627 Mon Sep 17 00:00:00 2001
+From: zglstudylinux <zglstudylinux@users.noreply.github.com>
+Date: Mon, 19 Oct 2026 13:47:24 +0800
+Subject: [PATCH] t113: zgl_board enable rtk_hciattach and BT-first boot order
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- defconfig: CONFIG_PACKAGE_rtk_hciattach=y
+- rc.local: start rtk_hciattach (rtk_h5 on ttyS1) and wait for hci0
+  BEFORE loading 8723ds — the WiFi SDIO firmware download corrupts the
+  module's BT state and the module has no reset GPIO, so BT must come
+  first; logs to /tmp/bt_boot.log
+---
+ t113-zgl_board/base-files/etc/rc.local | 32 ++++++++++++++++++++++++++
+ t113-zgl_board/defconfig               |  2 +-
+ 2 files changed, 33 insertions(+), 1 deletion(-)
+
+diff --git a/t113-zgl_board/base-files/etc/rc.local b/t113-zgl_board/base-files/etc/rc.local
+index 927e180..6d88306 100755
+--- a/t113-zgl_board/base-files/etc/rc.local
++++ b/t113-zgl_board/base-files/etc/rc.local
+@@ -8,4 +8,36 @@ amixer -Dhw:audiocodec cset name='MIC3 Input Select' 1
+ amixer -Dhw:audiocodec cset name='MIC3 Switch' 1
+ amixer -Dhw:audiocodec cset name='ADC3 Gain' 19
+ 
++# RTL8723DS bring-up: BT FIRST, then WiFi.
++# The WiFi SDIO firmware download corrupts the module's BT ROM-download state,
++# and the module is always-powered with no reset GPIO, so BT (rtk_hciattach
++# downloads BT firmware over UART1) must run before 8723ds is loaded. The
++# 8723ds.ko is installed by kmod-net-rtl8723ds but intentionally NOT autoloaded.
++
++# Diagnostic: log whether 8723ds is already loaded and run BT in foreground
++# with full logging, waiting up to 30s for hci0.
++{
++	echo "=== rtl_bt_wifi: 8723ds loaded? ==="
++	lsmod | grep -c 8723ds || true
++	echo "=== rtl_bt_wifi: starting rtk_hciattach ==="
++	rtk_hciattach -n -s 115200 /dev/ttyS1 rtk_h5
++} > /tmp/bt_boot.log 2>&1 &
++BT_PID=$!
++
++for i in $(seq 1 30); do
++	[ -d /sys/class/bluetooth/hci0 ] && { echo "BT up after ${i}s" >> /tmp/bt_boot.log; break; }
++	sleep 1
++done
++
++# WiFi AFTER BT is up: the WiFi SDIO firmware download would otherwise corrupt
++# the module's BT ROM-download state (module is always-powered, no reset GPIO,
++# so a bad download state can only be cleared by a full power cycle).
++# 8723ds.ko is installed by kmod-net-rtl8723ds but intentionally NOT autoloaded
++# (see openwrt/target/t113/t113-common/modules.mk).
++if [ -d /sys/class/bluetooth/hci0 ]; then
++	modprobe 8723ds && echo "=== rtl_bt_wifi: 8723ds loaded (after BT) ===" >> /tmp/bt_boot.log
++else
++	echo "=== rtl_bt_wifi: WARNING hci0 not up, 8723ds NOT loaded; full power-cycle required ===" >> /tmp/bt_boot.log
++fi
++
+ exit 0
+diff --git a/t113-zgl_board/defconfig b/t113-zgl_board/defconfig
+index 84f6a8f..6103d84 100755
+--- a/t113-zgl_board/defconfig
++++ b/t113-zgl_board/defconfig
+@@ -6988,7 +6988,7 @@ CONFIG_PACKAGE_e2fsprogs=y
+ #
+ # rtk_hciattach
+ #
+-# CONFIG_PACKAGE_rtk_hciattach is not set
++CONFIG_PACKAGE_rtk_hciattach=y
+ # end of rtk_hciattach
+ 
+ # CONFIG_PACKAGE_acpid is not set
+-- 
+2.43.0
+
