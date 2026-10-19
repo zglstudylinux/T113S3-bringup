@@ -65,9 +65,10 @@ init 序列写完驱动会写验证标记(测试用):
 }
 ```
 
-**② `.../lcd/fl7707n_mipi.c` + `fl7707n_mipi.h`(新文件,旧屏驱动残留)**
+**② 删除 `.../lcd/fl7707n_mipi.c` + `fl7707n_mipi.h`(实测确认未使用后移除)**
 
-配置默认关(`CONFIG_LCD_SUPPORT_FL7707N_MIPI is not set`),不参与编译;但被下面 panels.c/panels.h 的注册块引用,交付保证自洽。可整文件复制。
+初版移植带入了这个旧屏驱动(配置默认关,不参与编译);实测确认完全未使用后已移除
+(文件 + panels.c/h 注册块 + Makefile/Kconfig 条目全部清掉,不影响编译和运行)。
 
 ### 3.2 内核修改(5 个文件,diff)
 
@@ -76,9 +77,6 @@ init 序列写完驱动会写验证标记(测试用):
 ```diff
 @@ -132,6 +132,12 @@ struct __lcd_panel *panel_array[] = {
  #endif
-+#ifdef CONFIG_LCD_SUPPORT_FL7707N_MIPI
-+	&fl7707n_mipi_panel,
-+#endif
 +#ifdef CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1
 +	&st7701sn_d240n2501v1_panel,
 +#endif
@@ -87,9 +85,6 @@ init 序列写完驱动会写验证标记(测试用):
 **② `.../disp/lcd/panels.h`** — extern 声明(同位置):
 
 ```diff
-+#ifdef CONFIG_LCD_SUPPORT_FL7707N_MIPI
-+extern struct __lcd_panel fl7707n_mipi_panel;
-+#endif
 +#ifdef CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1
 +extern struct __lcd_panel st7701sn_d240n2501v1_panel;
 +#endif
@@ -99,12 +94,6 @@ init 序列写完驱动会写验证标记(测试用):
 
 ```diff
 @@ -222,3 +222,15 @@
-+
-+config LCD_SUPPORT_FL7707N_MIPI
-+	bool "LCD support fl7707n_mipi panel"
-+	default n
-+	help
-+		If you want to support fl7707n_mipi panel for display driver, select it.
 +
 +config LCD_SUPPORT_ST7701SN_D240N2501V1
 +	bool "LCD support st7701sn_d240n2501v1 panel (DX 2.4\" 480x640 IPS, ST7701SN, 2-lane MIPI)"
@@ -116,9 +105,8 @@ init 序列写完驱动会写验证标记(测试用):
 **④ `.../disp/Makefile`** — 在 NT35510/B080UAN01 行后插入:
 
 ```diff
-@@ -67,6 +67,8 @@
+@@ -67,5 +67,7 @@
  disp-$(CONFIG_LCD_SUPPORT_B080UAN01_MIPI1200X1920) += lcd/b080uan01_mipi1200x1920.o
-+disp-$(CONFIG_LCD_SUPPORT_FL7707N_MIPI) += lcd/fl7707n_mipi.o
 +disp-$(CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1) += lcd/st7701sn_d240n2501v1.o
  disp-y += lcd/super_lcd_driver.o
 ```
@@ -330,10 +318,10 @@ mgr0: 480x640 fmt[rgb] cs[0x204] range[full] eotf[0x4] bits[8bits] err[0] ...
 
 | 测试 | 命令 | 结果 |
 |---|---|---|
-| 花屏(雪花) | `adb shell "dd if=/dev/urandom of=/dev/fb0 bs=480k count=2"` | `2+0 records in/out`,屏上满屏雪花 ✓(写满整个 fb 缓冲;用 `cat /dev/urandom > /dev/fb0` 会在写满后报 `No space left on device`,属正常——fb 是定长缓冲) |
-| 全黑 | `adb shell "dd if=/dev/zero of=/dev/fb0 bs=480k count=1"` | `1+0 records in/out`,屏全黑 ✓ |
-| 彩条 | `adb shell "echo 8 > /sys/class/disp/disp/attr/colorbar"` | `exit=0`,屏上出 4 条彩条 ✓ |
-| 关彩条 | `adb shell "echo 0 > /sys/class/disp/disp/attr/colorbar"` | `exit=0`,恢复正常显示 ✓ |
+| 花屏(雪花,全屏) | `adb shell "cat /dev/urandom > /dev/fb0"` | 写满整个 fb 缓冲后报 `No space left on device`(正常),屏上全部雪花 ✓(2026-10-19 实测:`dd if=/dev/urandom bs=480k` 一次只能覆盖前一部分,只有部分雪花) |
+| 清屏 | `adb shell "cat /dev/zero > /dev/fb0"` | 覆盖 fb,清掉花屏残留(彩条测试前必须先做,否则花屏残留影响) |
+| 彩条 | `adb shell "echo 8 > /sys/class/disp/disp/attr/colorbar"` | `exit=0`,屏上出彩条 ✓(必须先清屏) |
+| 关彩条 | — | `echo 0` **不会**关闭彩条恢复显示(2026-10-19 实测彩条一直显示直到下次 fb 写入/重启);要恢复画面直接重启 |
 
 ### 5.4 完成判据(全部通过)
 
@@ -356,7 +344,5 @@ mgr0: 480x640 fmt[rgb] cs[0x204] range[full] eotf[0x4] bits[8bits] err[0] ...
 
 ## 7. 涉及文件汇总
 
-内核 8 文件(3 新 + 5 改)+ 板级 3 文件,详见 §3;补丁导出:
-
-- `docs/patches/kernel/0001-t113-zgl_board-add-ST7701SN-MIPI-panel-D240N2501V1-4.patch`
-- `docs/patches/device/0001-t113-zgl_board-switch-lcd0-to-D240N2501V1-ST7701SN-M.patch`
+内核 6 文件(2 新:st7701sn_d240n2501v1.c + dx 侧显示修复;4 改:panels.c/h、Kconfig、Makefile)+ 板级 3 文件(board.dts、uboot-board.dts、config-5.4),全部修改的 diff 见 §3。
+初版带入的 fl7707n_mipi.c/.h 实测未使用后已删除(文件 + 注册块 + Makefile/Kconfig 条目全部清理,不影响编译运行)。

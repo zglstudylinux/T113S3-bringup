@@ -212,4 +212,3 @@ DISTRIB_RELEASE='21.02-SNAPSHOT'
 | `device/config/chips/t113/configs/zgl_board/buildroot/env.cfg` | 同上 |
 | `device/config/chips/t113/configs/zgl_board/openwrt/env.cfg` | 同上(此文件此前已修) |
 
-Patch: `docs/patches/device/0001-t113-add-zgl_board-BSP-with-UART3-debug-console-on-P.patch`

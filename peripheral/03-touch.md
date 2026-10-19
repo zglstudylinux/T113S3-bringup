@@ -267,6 +267,3 @@ $ adb shell hexdump /dev/input/event4
 | openwrt/target/t113 | `t113-zgl_board/defconfig` | 修改(evtest/i2c-tools=y) |
 
 Patch 导出:
-- `docs/patches/kernel/0001-t113-zgl_board-add-dx_touch-driver-D240N2501V1-touch.patch`
-- `docs/patches/device/0001-t113-zgl_board-enable-dx_touch-node-phase-3.patch`
-- `docs/patches/openwrt-target/0001-t113-add-t113-zgl_board-openwrt-target-lunch-entry-d.patch`

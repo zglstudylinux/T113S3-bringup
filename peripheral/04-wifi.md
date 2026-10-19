@@ -388,15 +388,15 @@ wlan0: CTRL-EVENT-SSID-TEMP-DISABLED ... reason=WRONG_KEY
 `pre-shared key may be incorrect` / `WRONG_KEY`,同时确认密码与加密套件:
 该 AP 是 `Group cipher: TKIP`,驱动已正确协商(GTK TKIP + PTK CCMP),排除兼容性问题。
 
-## 6. 涉及文件与 patch
+## 6. 涉及文件
 
-| 仓库 | 文件 | patch |
-|---|---|---|
-| kernel/linux-5.4 | `drivers/misc/sunxi-rf/sunxi-rfkill.c`、`sunxi-wlan.c` | `docs/patches/kernel/0003-t113-zgl_board-fix-sunxi-rfkill-probe-deferral-and-w.patch` |
-| device/config/chips/t113 | `configs/zgl_board/linux-5.4/board.dts`、`config-5.4` | `docs/patches/device/0004-t113-zgl_board-enable-rfkill-and-switch-WLAN-to-RTL8.patch` |
-| openwrt/target/t113 | `t113-common/modules.mk`、`t113-zgl_board/defconfig` | `docs/patches/openwrt-target/0002-t113-zgl_board-add-RTL8723DS-wifi-packages-drop-XR82.patch` |
+| 仓库 | 文件 |
+|---|---|
+| kernel/linux-5.4 | `drivers/misc/sunxi-rf/sunxi-rfkill.c`、`sunxi-wlan.c` |
+| device/config/chips/t113 | `configs/zgl_board/linux-5.4/board.dts`、`config-5.4` |
+| openwrt/target/t113 | `t113-common/modules.mk`、`t113-zgl_board/defconfig` |
 
-手动移植方式:直接 `git am <patch>`,或按上文 diff 手改。
+手动移植方式:按上文 diff 手改(修改哪个文件、改哪一行都已标注)。
 
 ## 7. 下一步
 
