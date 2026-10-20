@@ -49,6 +49,13 @@ tar -xvf T113-Tina5.0-V1.2.tar
 .repo/repo/repo sync -l
 ```
 
+> 环境坑(2026-10 复刻实录,详见 `docs/peripheral/08-replication.md`):
+> 1. 主机只有 Python 3.10+ 时,捆绑的 repo 1.24 会报 `No module named 'imp'`——
+>    需要 imp 兼容垫片 + py3 启动器(08-replication.md §1.1 有完整可复制的修法);
+> 2. 首次编译会弹免责声明等输入,后台/脚本环境会卡死——预置
+>    `touch <sdk>/.disclaimer_accpet`(或拷参考树同名文件)跳过;
+> 3. `tools/scripts/`、`docs/` 不在 repo 工程清单里,若解压后缺失需从原发布包补。
+
 <!-- 截图: repo sync 完成 -->
 
 拉取完成后 `ls` 应看到 `build/ device/ kernel/ brandy/ openwrt/ platform/ docs/` 等目录。
@@ -178,6 +185,8 @@ cd <sdk>
 source build/envsetup.sh
 lunch          # 选择 t113-zgl_board(新加的选项)
 
+./build.sh bootloader           # U-Boot/boot0(首次编译必须;pack 不自己编 bootloader,
+                                # 缺它 pack 会报 u-boot.fex cant be open)
 ./build.sh kernel -j8            # 内核 + 模块 + boot.img
 ./build.sh openwrt_rootfs -j1    # rootfs(必须 -j1:并行会踩全志 host 工具的 jobserver 坑)
 ./build.sh pack                  # 打包
@@ -2245,9 +2254,6 @@ CONFIG_PACKAGE_kmod-net-rtl8723ds=y               /* 新增,在上一行之后 *
 
 ```shell
 # 1. 开机自动部分(无需手动)
-adb shell 'dmesg | grep mmc1'
-# 预期: [    2.928544] mmc1: new high speed SDIO card at address 0001
-
 adb shell 'cat /proc/misc | grep wlan'
 # 预期: 200 sunxi-wlan            ← 静态 minor 200 生效
 
@@ -2285,6 +2291,60 @@ adb shell 'udhcpc -i wlan0 -n -q'
 # 5. ping 验证
 adb shell 'ping -c 3 网关IP'     # 0% packet loss
 adb shell 'ping -c 3 223.5.5.5'  # 0% packet loss
+```
+
+> **SDIO 枚举判据说明(实测 2026-10-20)**:旧文档用 `dmesg | grep mmc1` 找
+> `new high speed SDIO card`,但本镜像实测该行**不出现在 dmesg**(mmc core 的枚举
+> 打印发生在 8723ds probe 期间且级别/时机原因不落缓冲区)。可靠判据是
+> 8723ds probe 期间的 RTW 系列(8723ds 加载后约 0.2 秒):
+>
+> ```
+> [   12.347663] RTW: rtl8723ds v5.10.1-33-g2b795d825.20210322_beta
+> [   12.359534] RTW: rtl8723ds BT-Coex version = COEX20200103-3535
+> [   12.366128] sunxi-rfkill soc@3000000:rfkill@0: wlan power on success
+> [   12.473307] sunxi-rfkill soc@3000000:rfkill@0: bus_index: 1
+> [   12.490915] RTW: == SDIO Card Info ==
+> [   12.523463] RTW: CHIP TYPE: RTL8723D
+> [   12.563986] RTW: sdio_power_on_check: 0x1B8 test Pass.
+> [   12.679335] RTW: rtl8723d_FirmwareDownload fw: FW_NIC, size: 29262
+> [   13.227940] RTW: rtw_ndev_init(wlan0) if1 mac_addr=34:75:63:28:4d:23
+> ```
+>
+> `adb shell 'dmesg | grep -E "RTW: CHIP TYPE|rtw_ndev_init"'` 有输出即 SDIO 枚举
+> 成功、驱动 probe 完成。
+
+**实测记录(zgl 热点,WPA2-PSK,2026-10-20)**:
+
+```text
+$ adb shell 'wpa_cli -i wlan0 status'
+bssid=62:e4:47:9d:d6:12
+freq=2412
+ssid=zgl
+id=0
+mode=station
+wifi_generation=4
+pairwise_cipher=CCMP
+group_cipher=CCMP
+key_mgmt=WPA2-PSK
+wpa_state=COMPLETED          ← 连接完成
+address=34:75:63:28:4d:23
+
+$ adb shell 'udhcpc -i wlan0 -n -q'
+udhcpc: lease of 10.25.28.164 obtained, lease time 3599
+udhcpc: ip addr add 10.25.28.164/255.255.255.0 broadcast 10.25.28.255 dev wlan0
+udhcpc: setting default routers: 10.25.28.129
+
+$ adb shell 'ping -c 3 10.25.28.129'
+3 packets transmitted, 3 packets received, 0% packet loss
+$ adb shell 'ping -c 3 223.5.5.5'
+3 packets transmitted, 3 packets received, 0% packet loss
+
+$ adb shell 'iw dev wlan0 link'
+Connected to 62:e4:47:9d:d6:12 (on wlan0)
+    SSID: zgl
+    freq: 2412
+    signal: -42 dBm            ← 信号强度
+    tx bitrate: 72.2 MBit/s    ← 速率
 ```
 
 <!-- 截图: wpa_cli status COMPLETED + ping -->
@@ -2731,20 +2791,36 @@ exit 0
 adb shell cat /tmp/bt_boot.log
 ```
 
-成功日志:
+成功日志(**实测原文 2026-10-20**):
 
 ```
 === rtl_bt_wifi: 8723ds loaded? ===
 0
 === rtl_bt_wifi: starting rtk_hciattach ===
+Realtek Bluetooth init uart with init speed:115200, final_speed:115200, type:HCI UART H5
 Realtek Bluetooth :Realtek hciattach version 3.1
+Realtek Bluetooth :3-wire sync pattern resend : 1, len: 8
 Realtek Bluetooth :Get SYNC Resp Pkt
+Realtek Bluetooth :Get SYNC pkt-active mode
+Realtek Bluetooth :3-wire config pattern resend : 1 , len: 10
+Realtek Bluetooth :Get CONFG pkt-active mode
+Realtek Bluetooth :Get CONFG resp pkt-active mode
 Realtek Bluetooth :H5 init finished
+Realtek Bluetooth :H5 IC
+Realtek Bluetooth :RTK send HCI_VENDOR_READ_RTK_ROM_VERISION_Command
+Realtek Bluetooth :Read Local Version Information with Status:0
 Realtek Bluetooth :HCI Version 0x08          ← ROM 状态(BT4.2)
+Realtek Bluetooth :HCI Revision 0x000d
 Realtek Bluetooth :LMP Subversion 0x8723     ← ROM 干净态标志(被污染时是 0x6f72 + IC: NONE)
+Realtek Bluetooth :Read RTK rom version with Status:0
+Realtek Bluetooth :LMP Subversion 0x8723
+Realtek Bluetooth :EVersion 2
 Realtek Bluetooth :IC: RTL8723DS
 Realtek Bluetooth :Firmware/config: rtl8723d_fw, rtl8723d_config
+Realtek Bluetooth :Couldnt access customer BT MAC file /opt/bdaddr   ← 正常,无 /opt/bdaddr 时用默认 MAC
+Realtek Bluetooth :Original Cfg len 41
 Realtek Bluetooth :Config baud : 04928002    ← 固件下载后切 1.5M
+Realtek Bluetooth :hw flow control: 1
 Realtek Bluetooth :Load FW /lib/firmware/rtlbt/rtl8723d_fw OK
 Realtek Bluetooth :Init Process finished
 BT up after 2s                                ← rc.local 打点
@@ -2761,12 +2837,18 @@ adb shell '/sbin/start-stop-daemon -b -m -S -p /tmp/bt_test.pid -x /usr/bin/bt_t
 
 ```shell
 adb shell hciconfig hci0
-# 预期:
-# hci0: Type: Primary  Bus: UART
-#       BD Address: 34:75:63:XX:XX:XX  ACL MTU: 1021:8  SCO MTU: 255:12   ← 1021 = 锁版特征
-#       UP RUNNING PSCAN ISCAN                                            ← 可连接+可发现
+# 预期(**实测 2026-10-20**):
+# hci0:	Type: Primary  Bus: UART
+# 	BD Address: 34:75:63:46:D1:A3  ACL MTU: 1021:8  SCO MTU: 255:12   ← 1021 = 锁版特征
+# 	UP RUNNING PSCAN ISCAN                                            ← 可连接+可发现
+# 	RX bytes:2473 acl:0 sco:0 events:75 errors:0
+# 	TX bytes:3097 acl:0 sco:0 commands:76 errors:0
 adb shell hciconfig hci0 -a | grep -E "Name|Class"
-# 预期: Name: 'aw-bt-test-XX-XX'  Class: 0x040400 (Audio/Video)           ← btmanager 4.0.3 回调标志
+# 预期(**实测**):
+# 	Name: 'aw-bt-test-D1-A3'                                          ← 后缀 = MAC 后两字节
+# 	Class: 0x040400                                                   ← btmanager 4.0.3 回调标志
+# 	Service Classes: Rendering
+# 	Device Class: Audio/Video, Uncategorized
 ```
 
 ##### 3. 手机实测
@@ -2774,7 +2856,37 @@ adb shell hciconfig hci0 -a | grep -E "Name|Class"
 1. 手机蓝牙搜索 → 看到 **`aw-bt-test-XX-XX`**(音频设备)
 2. 点击配对 → **不弹 PIN,直接配对成功**(btmanager 4.0.3 免 PIN)
 3. 媒体音频里连上 → 放歌 → **喇叭出声、音质正常**
-4. 音频流证据:`/proc/asound/card0/pcm0p/sub0/status` 的 `state: RUNNING`、`hw_ptr` 持续增长;`hciconfig hci0` 的 RX acl 包持续增长
+4. 音频流证据(实测 2026-10-20):
+
+```shell
+# 音频流在跑(playing 时连抓两次,hw_ptr 持续增长):
+$ adb shell 'cat /proc/asound/card0/pcm0p/sub0/status'
+state: RUNNING                ← A2DP 音频流经 codec 输出
+owner_pid   : 2540            ← bt_test 的 bluealsa/a2dp 线程
+hw_ptr      : 2113344
+(3 秒后再抓:)
+hw_ptr      : 2265728         ← 持续增长 = 正在出声
+
+# 蓝牙链路(RX acl 包持续增长, 3 秒 3507→3723→5141):
+$ adb shell 'hciconfig hci0'
+	RX bytes:2101591 acl:3507 sco:0 events:278 errors:0
+	TX bytes:38341 acl:147 sco:0 commands:103 errors:0
+(3 秒后:)
+	RX bytes:2234029 acl:3723 sco:0 events:281 errors:0   ← acl 包在涨 = 手机在推音乐数据
+
+# 连接状态(手机已配对加密):
+$ adb shell 'hcitool con'
+Connections:
+	> ACL 94:F6:F2:C7:54:C9 handle 2 state 1 lm MASTER AUTH ENCRYPT
+	                                    ↑ 手机侧地址  ↑ 已认证+已加密
+
+# 编解码参数(A2DP 下发到 codec 的实际格式):
+$ adb shell 'cat /proc/asound/card0/pcm0p/sub0/hw_params'
+access: MMAP_INTERLEAVED
+format: S16_LE
+channels: 2
+rate: 48000 (48000/1)         ← A2DP 标准 48kHz
+```
 
 <!-- 截图: 手机蓝牙列表 + hciconfig -->
 
@@ -2942,3 +3054,4 @@ adb shell 'aplay /tmp/test.wav'
 | 触摸 | 09720c63035d698fe6458333f1aab491 |
 | WiFi | 1e90397e953a80b446778124ed46b977(21022720 字节) |
 | 蓝牙 | 24b93df616c7c36ca6ad4cd694b90174(21153792 字节) |
+| **从零复刻(按本教程,new_build_t113,2026-10-20)** | **388f7f14122ec69602e785f83b94ecb8**(21153792 字节,板上 7 外设实测全通过;见 `docs/peripheral/08-replication.md`) |

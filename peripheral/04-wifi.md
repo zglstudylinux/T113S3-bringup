@@ -4,6 +4,7 @@
 > 模块:RTL8723DS(2.4G WiFi + BT 二合一,SDIO 接 WiFi,UART 接 BT)
 > 本篇只讲 WiFi;蓝牙在 [05-bt.md](05-bt.md)。
 > 参考文档:`docs/datasheet/` 下的 Tina Wi-Fi 开发指南、Wi-Fi 模组移植指南。
+> 2026-10-20 从零复刻镜像再次实测通过,复刻记录见 [08-replication.md](08-replication.md)。
 
 ## 1. 硬件连接(新原理图 `docs/sch/T113.pdf` / `T113.md`)
 
@@ -272,9 +273,6 @@ unsquashfs -l out/t113/zgl_board/openwrt/rootfs.img | grep -E 'rtlbt|8723ds.ko'
 ### 5.1 开机自动部分(无需手动)
 
 ```bash
-adb shell dmesg | grep mmc1
-# [    2.928544] mmc1: new high speed SDIO card at address 0001   ← 开机 2.9s 即枚举到
-
 adb shell cat /proc/misc | grep -E 'wlan|ion'
 # 200 sunxi-wlan        ← 静态 minor 200 生效
 # 127 ion
@@ -285,6 +283,18 @@ adb shell ls /dev/sunxi-wlan
 adb shell ls /sys/bus/platform/drivers/ | grep sunxi-rfkill
 # sunxi-rfkill                          ← rfkill probe 成功绑定
 ```
+
+> **SDIO 枚举判据(2026-10-20 复刻镜像实测修正)**:旧记录用的
+> `dmesg | grep mmc1`(`new high speed SDIO card`)在部分镜像上**不落 dmesg**
+> (mmc core 打印时机原因)。8723ds 加载后看 RTW 探测系列日志更可靠:
+>
+> ```bash
+> adb shell 'dmesg | grep -E "RTW: CHIP TYPE|rtw_ndev_init"'
+> # [   12.523463] RTW: CHIP TYPE: RTL8723D
+> # [   13.227940] RTW: rtw_ndev_init(wlan0) if1 mac_addr=34:75:63:28:4d:23
+> ```
+>
+> 有这两行即 SDIO 枚举 + 驱动 probe 完成。
 
 ### 5.2 手动加载 WiFi 模块(阶段 5 后由 rc.local 自动)
 
