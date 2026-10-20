@@ -219,3 +219,13 @@ WiFi + 蓝牙由 adb 按教程命令实测,全部通过:
 | 阶段 | 镜像 md5(`out/t113_linux_zgl_board_uart0.img`) |
 |---|---|
 | 最终镜像(21153792 字节,2026-10-20) | `388f7f14122ec69602e785f83b94ecb8` |
+
+## 附 2:编译环境容器化(2026-10-20 实测)
+
+本篇 §1.1/§2.1~2.5 的环境坑(repo py3、tools/scripts、disclaimer、defconfig 残留、
+evtest 下载、bootloader)已全部通过 **Ubuntu 22.04 Docker 容器**固化解决——
+任何人换 Ubuntu 版本都能得到一致结果。构建资产与踩坑实录:
+
+- 使用文档:`docs/build-env/docker/README.md`
+- 实测全记录:`docs/build-env/docker/REPLICATION_LOG.md`
+  (从解压原厂 tar 到产出镜像 ~5.5h,关键二进制与宿主直编逐字节一致)

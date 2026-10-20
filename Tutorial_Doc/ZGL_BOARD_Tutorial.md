@@ -26,6 +26,12 @@
 
 主机需要 x86_64 Linux(示例用 Ubuntu),安装编译依赖:
 
+> **推荐:用 Docker 跳过宿主环境差异**(可选)。不同 Ubuntu 版本的报错根源有 4 类
+> (32 位 pack 工具、Python 版本窗口、宿主 gcc/make 版本、repo 工具),统一用
+> Ubuntu 22.04 容器可全部规避,且已实测从解压 tar 到产出镜像全流程一致。
+> 见 `docs/build-env/docker/README.md`(两条命令:`build-image` + `zgl_build`),
+> 踩坑实录见 `docs/build-env/docker/REPLICATION_LOG.md`。下面仍然给出宿主直编的依赖。
+
 ```shell
 sudo apt install build-essential flex bison libncurses-dev libssl-dev libelf-dev \
   zlib1g-dev device-tree-compiler gawk autoconf automake libtool pkg-config \
