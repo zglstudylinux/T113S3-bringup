@@ -163,12 +163,12 @@ repo 源码还有 2 处 py2 写法(str decode / 生成器 next)——这些与 d
 是 SDK 自带 repo 工具 2014 年代码的固有问题,Ubuntu 20/22/24 宿主直编同样会遇到。
 补丁只改 `.repo/repo/` 内的 repo 工具源码,不碰任何 SDK git 仓库。
 
-(下面命令块一次性执行,复制即可;**不需要** imp 垫片——python 3.10 里 imp 还在,
-用官方 `.repo/repo/repo` 直接跑):
+(下面按 5.1 / 5.2 / 5.3 **三个命令块分开复制执行**;**不需要** imp 垫片——
+python 3.10 里 imp 还在,用官方 `.repo/repo/repo` 直接跑):
+
+### 5.1 写补丁脚本到 /tmp(整块复制,粘贴后回车,无输出)
 
 ```shell
-SDK=~/t113/sdk/T113-Tina5.0-V1.2
-
 cat > /tmp/fix_repo.py << 'EOF'
 import sys
 sdk = sys.argv[1]
@@ -259,10 +259,20 @@ if 'next(self._next_id)' not in src:
     open(p, 'w').write(src)
     print('event_log OK')
 EOF
+```
+
+### 5.2 执行补丁(复制运行,预期 4 行 OK)
+
+```shell
+SDK=~/t113/sdk/T113-Tina5.0-V1.2
 python3 /tmp/fix_repo.py $SDK
 # 预期: platform_utils OK / help.py OK / git_config OK / event_log OK (四行)
+# 少任何一行都不要往下走,把输出贴出来排查
+```
 
-# 拉取代码(用官方 repo 命令,它自带 py3 支持)
+### 5.3 拉取代码(约 25 分钟)
+
+```shell
 docker run --rm \
   -v ~/t113/sdk/T113-Tina5.0-V1.2:/sdk \
   -w /sdk \
@@ -270,7 +280,10 @@ docker run --rm \
   bash -c ".repo/repo/repo sync -l && echo REPO_SYNC_DONE"
 # 预期: 开头一行 "warning: Python 3 support is currently experimental"(正常),
 # 大量 "Updating files: 100%" 后出现 REPO_SYNC_DONE
-# 完成后 ls 应看到 brandy/ bsp/ build/ device/ kernel/ openwrt/ platform/ prebuilt/ rtos/ tools/ build.sh
+
+# 完成后验证:
+ls ~/t113/sdk/T113-Tina5.0-V1.2/
+# 预期: brandy  bsp  build  buildroot  build.sh  device  kernel  openwrt  platform  prebuilt  rtos  tools
 ```
 
 > 注意:`tools/scripts/`、`docs/` 不在 SDK 的 repo 项目清单里,默认解压不会有——
