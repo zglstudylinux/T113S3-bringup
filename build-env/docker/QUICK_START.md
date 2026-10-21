@@ -150,6 +150,13 @@ ls ~/t113/sdk/T113-Tina5.0-V1.2/
 
 ## 第 5 步 repo sync 拉取代码(容器内,约 25 分钟)
 
+**为什么这一步必须有**:SDK 不是一个大目录,而是 **122 个独立 git 仓库**
+(kernel/device/openwrt/brandy/platform...)由官方 `repo` 工具统一管理。
+解压 tar 后只有 `.repo/` 里的对象库,**工作树(看得见的 kernel/、device/ 等目录)
+要靠 `repo sync -l` 从对象库 checkout 出来**——这一步是 SDK 官方流程,不可跳过、
+不可替代(没有 repo 就没有完整源码树)。`repo` 命令在 SDK 压缩包里自带
+(`.repo/repo/repo`),不是额外安装的东西。
+
 SDK 捆绑的 repo 工具(2014 年版)有 4 处 Python 3 不兼容,需要先打 4 个小补丁。
 **为什么打补丁**:22.04 容器的 python 3.10 里,`Queue`/`formatter` 标准模块已被移除、
 repo 源码还有 2 处 py2 写法(str decode / 生成器 next)——这些与 docker 无关,
