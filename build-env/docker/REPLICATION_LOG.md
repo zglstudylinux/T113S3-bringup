@@ -122,7 +122,7 @@ docker run --rm -v <sdk>:/sdk -w /sdk t113-build:22.04 \
 
 ```shell
 docker run --rm -v <sdk>:/sdk -w /sdk t113-build:22.04 \
-  bash -c ". tools/scripts/setup-env.sh && source build/envsetup.sh && \
+  bash -c "source build/envsetup.sh && \
            lunch t113-zgl_board && \
            ./build.sh bootloader && \
            ./build.sh kernel -j8 && \
@@ -191,7 +191,6 @@ cd <sdk>/docs/build-env/docker && ./build-docker.sh build-image
 
 # 日常:进交互 shell 编译(改动后增量,快)
 ./build-docker.sh shell /path/to/sdk
-#   . tools/scripts/setup-env.sh
 #   source build/envsetup.sh
 #   lunch t113-zgl_board
 #   ./build.sh kernel -j8 && ./build.sh pack
@@ -199,6 +198,23 @@ cd <sdk>/docs/build-env/docker && ./build-docker.sh build-image
 # 或者一键全流程(干净树从零)
 ./build-docker.sh zgl-build /path/to/sdk
 ```
+
+## 6.1 后续验证:彻底去掉 tools/scripts/(2026-10-21 实测)
+
+原 SDK 压缩包里**没有** `tools/scripts/`(setup-env.sh/sync_sdk.py 是历史辅助,不在
+repo 项目清单里)。为贴近初学者真实路径,实测把 docker 流程对它的依赖**完全去除**:
+
+- `apt-packages.txt` 增加 `python-is-python3`:容器裸 `python` → 3.10。
+  背景:`build/mkcmd.sh:352/587/594` 在 **lunch 阶段**调裸 `python`(计算 defconfig
+  相对路径),Ubuntu 默认无 `python` 命令,这是去脚本后的唯一硬依赖。
+  SDK 自带 python3.8/make4.1 由 `openwrt/build/tinahooks_variable.mk:18` 在构建期
+  自动接管;`build/envsetup.sh:18` 自己 export `TINA_TOPDIR`——都不依赖 setup-env.sh。
+- 已从 SDK 树删除 `tools/scripts/` 后实测(2026-10-21,镜像 e1c3fac):
+  - `source build/envsetup.sh && lunch t113-zgl_board` → 通过,无 python 报错
+  - `./build.sh kernel -j8` + `./build.sh pack` → 通过
+  - 产物 `t113_linux_zgl_board_uart0.img` 21151744 字节(与之前完全一致)
+
+**结论:docker 环境下 SDK 压缩包解压即可用,无需补任何脚本。**
 
 ## 7. 结论
 

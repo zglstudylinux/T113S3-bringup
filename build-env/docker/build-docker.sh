@@ -6,6 +6,9 @@
 #   ./build-docker.sh shell [SDK_DIR]          进交互编译 shell(SDK 挂在 /sdk)
 #   ./build-docker.sh run "命令" [SDK_DIR]     容器内非交互执行一条命令
 #   ./build-docker.sh zgl-build [SDK_DIR]      一键全流程: kernel + openwrt_rootfs + pack
+#                                              (无需任何预置脚本;SDK 自带 python3.8/make4.1
+#                                               由构建系统自动接管,系统 python 由
+#                                               python-is-python3 提供)
 #
 # SDK_DIR 缺省自动推断:本脚本位于 <sdk>/docs/build-env/docker/,向上三层即 SDK 根。
 set -e
@@ -69,7 +72,7 @@ case "$1" in
     zgl-build)
         SDK_DIR="$(resolve_sdk_dir "" "$2")"
         echo "== SDK: $SDK_DIR -> /sdk =="
-        INNER=". tools/scripts/setup-env.sh && source build/envsetup.sh && lunch t113-zgl_board && ./build.sh kernel -j8 && ./build.sh openwrt_rootfs -j1 && ./build.sh pack"
+        INNER="source build/envsetup.sh && lunch t113-zgl_board && ./build.sh kernel -j8 && ./build.sh openwrt_rootfs -j1 && ./build.sh pack"
         docker_run "$SDK_DIR" bash -lc "script -qec \"$INNER\" /tmp/zgl-build.log"
         ;;
     *)

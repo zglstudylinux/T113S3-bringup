@@ -5,6 +5,9 @@
 >
 > **✅ 已实测全流程验证**(2026-10-20,从解压原厂 tar 到产出镜像,与宿主直编结果一致):
 > 完整踩坑实录见 [REPLICATION_LOG.md](REPLICATION_LOG.md)。
+>
+> **学员入口:从零部署+编译+测试的 copy-paste 手册见 [QUICK_START.md](QUICK_START.md)**
+> (git clone 仓库 → 装 docker → 下载 SDK → 编译 → 烧录 → 7 外设测试,逐条命令)。
 
 ## 1. 为什么需要容器(版本差异根源)
 
@@ -28,12 +31,17 @@ cd <sdk>/docs/build-env/docker
 # 1) 构建镜像(首次约 5 分钟,自动带宿主 uid/gid)
 ./build-docker.sh build-image
 
-# 2) 一键从零编译(等价于教程的 setup-env + envsetup + lunch + kernel + openwrt + pack)
+# 2) 一键从零编译(等价于 envsetup + lunch + kernel + openwrt + pack)
 ./build-docker.sh zgl-build /home/xxx/T113-Tina5.0-V1.2
 # SDK 目录不传则自动用本脚本向上三层的 SDK 树
 
 # 产物:<sdk>/out/t113_linux_zgl_board_uart0.img
 ```
+
+> **无需任何预置脚本**。Ubuntu 22.04 容器自带 python 3.10(在 OpenWrt prereq 窗口内,
+> 由 python-is-python3 包提供裸 `python` 命令),SDK 自带的 python3.8/make4.1
+> 由构建系统自动接管——原 SDK 压缩包里没有的 `tools/scripts/setup-env.sh` 不需要,
+> 容器环境已经适配好。
 
 国内网络可换源构建镜像:
 
@@ -47,7 +55,6 @@ docker build --build-arg APT_MIRROR=mirrors.aliyun.com -t t113-build:22.04 .
 # 进交互编译 shell(推荐日常用这个,里面按教程正常操作)
 ./build-docker.sh shell /home/xxx/T113-Tina5.0-V1.2
 # 容器内:
-#   . tools/scripts/setup-env.sh
 #   source build/envsetup.sh
 #   lunch t113-zgl_board
 #   ./build.sh kernel -j8
