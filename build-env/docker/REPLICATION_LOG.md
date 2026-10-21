@@ -223,3 +223,23 @@ repo 项目清单里)。为贴近初学者真实路径,实测把 docker 流程�
 - 环境差异问题(4 类宿主依赖)被容器固化解决:任何人 clone 文档仓库、装 docker,
   `build-image` + `zgl-build` 两条命令即可得到一致结果
 - 与宿主直编相比只多了容器开销(首轮 apt + 镜像 ~20 分钟),编译时长本身相当
+
+## 6.2 QUICK_START.md 学员流程端到端验证(2026-10-21 实测)
+
+模拟学员环境:全新目录,只 clone 文档仓库(QUICK_START.md/构建资产)+ 官方 SDK tar,
+不复制任何旧文件,逐条按 `QUICK_START.md` 执行:
+
+| 步骤 | 结果 |
+|---|---|
+| 0. docker 前置 | ✅(宿主已有 docker-ce) |
+| 1. clone github 仓库 | ✅ 6 个资产文件齐全 |
+| 2. 下载 SDK tar + md5 | ✅ 7bcafb605bccd586d86716933f374ad2 |
+| 3. build-image | ✅(镜像 e1c3fac,821MB) |
+| 4. 容器内解压 | ✅ 11G .repo |
+| 5. repo 补丁(4 处)+ repo sync | ✅ `platform_utils OK / help.py OK / git_config OK / event_log OK` → `REPO_SYNC_DONE`,30G 全量 |
+| 6. 按教程适配(脚本) | ✅ 0 处 SKIP |
+| 7. 全量编译(zgl-build 流程) | ✅ bootloader ~9min + kernel ~25min + openwrt ~5h + pack ~5min |
+| 8. 验收镜像 | ✅ **21151744 字节**,md5 `f3df692f60d2ee6ee14b879b2786880a` |
+| rootfs 产物核对 | ✅ rtk_hciattach/bt_test/libbtmg 锁版 md5 与此前完全一致;8723ds.ko/rtlbt 固件/rc.local BT 时序全部在位 |
+
+**结论:QUICK_START.md 从零部署→编译→产物验收全链路无误,学员按手册逐条复制即可复现。**

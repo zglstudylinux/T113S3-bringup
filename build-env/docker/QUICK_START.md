@@ -339,7 +339,9 @@ IMG=~/t113/sdk/T113-Tina5.0-V1.2/out/t113_linux_zgl_board_uart0.img
 test -s $IMG && echo "IMAGE OK: $(stat -c%s $IMG) bytes"
 md5sum $IMG
 # 预期: 21151744 字节(±2KB 属正常,时间戳差异)
-# 参考值: 1c4b281b1b97e6a650b451787c596e1e(2026-10-20 实测)
+# 参考值(±2KB 属正常,时间戳差异):
+# 1c4b281b1b97e6a650b451787c596e1e(2026-10-20 实测,Ubuntu 24.04 宿主 + 22.04 容器)
+# f3df692f60d2ee6ee14b879b2786880a(2026-10-21 实测,Ubuntu 24.04 宿主 + 22.04 容器,全新学员流程)
 ```
 
 rootfs 内容自检(可选):
