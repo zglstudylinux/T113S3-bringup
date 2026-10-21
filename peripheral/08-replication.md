@@ -7,7 +7,14 @@
 
 ## 1. 解压与拉取代码
 
-### 1.1 `repo sync -l` 在 Python 3.10+ 上失败(环境问题,教程外的第一个坑)
+### 1.1 `repo sync -l` 在 Python 3.12 上失败(环境问题,教程外的第一个坑)
+
+> **适用范围(2026-10-21 实测更正)**:本节的 imp 垫片 + repo_py3 启动器方案只
+> **python 3.12**(Ubuntu 24.04 宿主直编)需要——3.12 删除了 imp 模块。
+> **Python 3.10(Ubuntu 22.04 容器)里 imp 还在**(只是 DeprecationWarning),
+> 官方 `.repo/repo/repo` 直接可用,只需修 4 处:`platform_utils.py` 的 Queue、
+> `subcmds/help.py` 的 formatter、`git_config.py` 的 decode、`event_log.py` 的
+> next()——见 `docs/build-env/docker/QUICK_START.md` 第 5 步(22.04 容器的标准流程)。
 
 **现象**:解压后按教程执行 `.repo/repo/repo sync -l`,报:
 

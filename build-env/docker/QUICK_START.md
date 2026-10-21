@@ -17,11 +17,42 @@
 
 要求:x86_64,磁盘空闲 ≥ 60G(SDK 树 30G + out/ 6G + Docker 镜像 1G + tar 11G),8 核 16G 以上更快。
 
+### 0.1 先确认网络没有失效代理(实测踩坑)
+
+如果 `apt`/`curl` 报 `Could not connect to 192.168.32.153:7897`(或任何 `Connection refused`),
+说明系统配了失效代理——先清掉再装包(按配了哪个清哪个):
+
 ```shell
-# 安装 docker(Ubuntu 20/22/24 通用)
+# 查哪里配了代理
+env | grep -i proxy                                   # 当前 shell 环境变量
+grep -r "proxy" /etc/apt/apt.conf.d/ 2>/dev/null      # apt 配置
+cat /etc/environment 2>/dev/null | grep -i proxy      # 系统环境
+
+# 清 apt 代理(有这个文件才需要)
+sudo rm -f /etc/apt/apt.conf.d/*proxy*
+# 清环境变量代理: 编辑 /etc/environment 删掉 proxy 行,或当前会话:
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+```
+
+### 0.2 安装 docker(Ubuntu 20/22/24 通用)
+
+```shell
 sudo apt update
-sudo apt install -y docker.io docker-buildx
+# 二选一:
+sudo apt install -y docker.io docker-buildx    # Ubuntu 源(推荐,简单)
+# 若之前装过 docker-ce/containerd 报 "Conflicts: containerd",改用官方源方式,
+# 或先清残留: sudo apt remove -y docker-ce containerd containerd.io && sudo apt autoremove
 sudo systemctl enable --now docker
+```
+
+> 坑(实测):`docker.io` 会拉 `containerd.io`,与手动装过的 `containerd` 冲突
+> (`Conflicts: containerd`)。新机器无此问题;有残留的机器先 `sudo apt remove -y
+> containerd containerd.io` 再装。
+
+```shell
+# 把当前用户加进 docker 组(免 sudo 用 docker),执行后要重新登录一次
+sudo usermod -aG docker $USER
+```
 
 # 把当前用户加进 docker 组(免 sudo 用 docker),执行后要重新登录一次
 sudo usermod -aG docker $USER
@@ -119,68 +150,23 @@ ls ~/t113/sdk/T113-Tina5.0-V1.2/
 
 ## 第 5 步 repo sync 拉取代码(容器内,约 25 分钟)
 
-SDK 捆绑的 repo 工具(2014 年版)不兼容 Python 3.10+,需要先打 4 个小补丁
-(下面命令块一次性执行,复制即可):
+SDK 捆绑的 repo 工具(2014 年版)有 4 处 Python 3 不兼容,需要先打 4 个小补丁。
+**为什么打补丁**:22.04 容器的 python 3.10 里,`Queue`/`formatter` 标准模块已被移除、
+repo 源码还有 2 处 py2 写法(str decode / 生成器 next)——这些与 docker 无关,
+是 SDK 自带 repo 工具 2014 年代码的固有问题,Ubuntu 20/22/24 宿主直编同样会遇到。
+补丁只改 `.repo/repo/` 内的 repo 工具源码,不碰任何 SDK git 仓库。
+
+(下面命令块一次性执行,复制即可;**不需要** imp 垫片——python 3.10 里 imp 还在,
+用官方 `.repo/repo/repo` 直接跑):
 
 ```shell
 SDK=~/t113/sdk/T113-Tina5.0-V1.2
 
-# 5.1 imp 兼容垫片
-cat > $SDK/.repo/repo/imp_compat.py << 'EOF'
-import importlib.util
-import sys
-import types
-
-
-def new_module(name):
-    return types.ModuleType(name)
-
-
-def load_source(modname, filepath):
-    from importlib.machinery import SourceFileLoader
-    loader = SourceFileLoader(modname, filepath)
-    spec = importlib.util.spec_from_file_location(modname, filepath, loader=loader)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[modname] = module
-    loader.exec_module(module)
-    return module
-
-
-def find_module(name, path=None):
-    raise ImportError(name)
-
-
-sys.modules.setdefault('imp', sys.modules[__name__])
-EOF
-
-# 5.2 python3 启动器
-cat > $SDK/.repo/repo_py3 << 'EOF'
-#!/usr/bin/env python3
-import sys, os
-_HERE = os.path.dirname(os.path.realpath(__file__))
-_REPO = os.path.join(_HERE, 'repo')
-sys.path.insert(0, _HERE)
-sys.path.insert(0, _REPO)
-import imp_compat
-
-_argv = sys.argv[1:]
-if not any(a.startswith('--wrapper-version') for a in _argv):
-    _argv = ['--wrapper-version=1.24',
-             '--wrapper-path=' + os.path.join(_REPO, 'repo'),
-             '--repo-dir=' + _HERE, '--'] + _argv
-sys.argv = [sys.argv[0]] + _argv
-
-_g = {'__name__': '__main__', '__file__': os.path.join(_REPO, 'main.py')}
-exec(open(os.path.join(_REPO, 'main.py')).read(), _g)
-EOF
-chmod +x $SDK/.repo/repo_py3
-
-# 5.3 修 4 处 Python 3 不兼容(repo 工具源码,不属于任何 SDK 仓库)
-# 5.3.1 platform_utils.py: Queue
 cat > /tmp/fix_repo.py << 'EOF'
 import sys
 sdk = sys.argv[1]
 
+# 1. platform_utils.py: Queue 模块(py3 改名 queue)
 p = sdk + '/.repo/repo/platform_utils.py'
 src = open(p).read()
 if 'from queue import Queue' not in src:
@@ -192,6 +178,7 @@ except ImportError:
     open(p, 'w').write(src)
     print('platform_utils OK')
 
+# 2. subcmds/help.py: formatter 模块(py3.10 删除,用文件内 shim 等价类)
 p = sdk + '/.repo/repo/subcmds/help.py'
 src = open(p).read()
 if 'except ImportError:' not in src.split('class Help')[0]:
@@ -246,6 +233,7 @@ except ImportError:
     open(p, 'w').write(src)
     print('help.py OK')
 
+# 3. git_config.py: py2 的 bytes.decode 在 py3 subprocess 返回 str 时报错
 p = sdk + '/.repo/repo/git_config.py'
 src = open(p).read()
 old = "    for line in d.decode('utf-8').rstrip('\\0').split('\\0'):"
@@ -255,6 +243,7 @@ if old in src:
     open(p, 'w').write(src)
     print('git_config OK')
 
+# 4. event_log.py: py2 生成器协议 .next() 在 py3 改为内置 next()
 p = sdk + '/.repo/repo/event_log.py'
 src = open(p).read()
 if 'next(self._next_id)' not in src:
@@ -266,13 +255,14 @@ EOF
 python3 /tmp/fix_repo.py $SDK
 # 预期: platform_utils OK / help.py OK / git_config OK / event_log OK (四行)
 
-# 5.4 拉取代码
+# 拉取代码(用官方 repo 命令,它自带 py3 支持)
 docker run --rm \
   -v ~/t113/sdk/T113-Tina5.0-V1.2:/sdk \
   -w /sdk \
   t113-build:22.04 \
-  bash -c ".repo/repo_py3 sync -l && echo REPO_SYNC_DONE"
-# 预期: 大量 "Updating files: 100%" 后出现 REPO_SYNC_DONE
+  bash -c ".repo/repo/repo sync -l && echo REPO_SYNC_DONE"
+# 预期: 开头一行 "warning: Python 3 support is currently experimental"(正常),
+# 大量 "Updating files: 100%" 后出现 REPO_SYNC_DONE
 # 完成后 ls 应看到 brandy/ bsp/ build/ device/ kernel/ openwrt/ platform/ prebuilt/ rtos/ tools/ build.sh
 ```
 
@@ -487,7 +477,7 @@ SDK 的 repo 项目清单里不含 `docs/`,编译**不需要**它。外设教程
 | 情况 | 看哪里 |
 |---|---|
 | Docker 拉镜像/apt 失败、死代理 | 本手册第 3 步提示框 + `REPLICATION_LOG.md` §1 |
-| repo sync 报 imp/Queue/formatter 错 | 本手册第 5 步补丁是否 4 处都打上(`python3 /tmp/fix_repo.py` 输出核对) |
+| repo sync 报 Queue/formatter/decode/next 错 | 本手册第 5 步补丁是否 4 处都打上(`python3 /tmp/fix_repo.py` 输出核对) |
 | 编译报错 | `README.md` 常见问题表 + `REPLICATION_LOG.md` §4(xxd/busybox 等) |
 | 外设不工作 | `ZGL_BOARD_Tutorial.md` 各章"排错速查" + `peripheral/01~07` 详细记录 |
 | 从零复刻遇到的坑全集 | `peripheral/08-replication.md` |

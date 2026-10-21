@@ -82,17 +82,21 @@ docker run --rm \
 
 ### 3.2 repo sync -l(容器内,~25 分钟)
 
-Ubuntu 22.04 的 python 3.10 同样过不了捆绑 repo 1.24 的 `import imp`
-(imp 在 3.5+ 被弃用、3.12 删除;实测 3.10 也没装)。按
-`docs/peripheral/08-replication.md` §1.1 的四件套方案修(`.repo/repo/` 内):
+捆绑 repo 1.24 有 4 处 Python 3 不兼容,需修(`.repo/repo/` 内,不碰任何 SDK git 仓库):
 
-1. 新增 `imp_compat.py`(new_module/load_source 垫片 + 自注册 `sys.modules['imp']`)
-2. 新增启动器 `.repo/repo_py3`(注入 `--wrapper-version/--wrapper-path/--repo-dir` + `--` 分隔)
-3. 修 4 处 py3 不兼容:
-   - `platform_utils.py`:`from Queue import Queue` → try queue/Queue
-   - `subcmds/help.py`:`from formatter import ...` → try/except + 文件内 shim 类
-   - `git_config.py:_ReadGit`:`d.decode()` 对 str 加 `hasattr` 保护
-   - `event_log.py`:`self._next_id.next()` → `next(self._next_id)`
+1. `platform_utils.py`:`from Queue import Queue` → try queue/Queue
+2. `subcmds/help.py`:`from formatter import ...` → try/except + 文件内 shim 类
+3. `git_config.py:_ReadGit`:`d.decode()` 对 str 加 `hasattr` 保护
+4. `event_log.py`:`self._next_id.next()` → `next(self._next_id)`
+
+> **2026-10-21 实测更正**:22.04 容器(python 3.10)里 `imp` 模块还在(只是
+> DeprecationWarning,3.12 才删除)→ **不需要** imp 垫片和 repo_py3 启动器,
+> 官方 `.repo/repo/repo` 直接可用(它自带 py3 支持)。上面 4 处补丁即可。
+> `docs/peripheral/08-replication.md` §1.1 的"四件套"(含 imp 垫片)是
+> Ubuntu 24.04 宿主(python 3.12)直编场景的历史记录,仅 3.12 需要。
+> 逐个补丁的挂点实测(按顺序):
+> `Queue` → `formatter` → `git_config decode` → `event_log next`,每修一个
+> 挂下一个;4 处全修后 `repo sync -l` 正常。
 
 然后:
 
