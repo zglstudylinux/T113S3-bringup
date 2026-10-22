@@ -247,3 +247,34 @@ repo 项目清单里)。为贴近初学者真实路径,实测把 docker 流程�
 | rootfs 产物核对 | ✅ rtk_hciattach/bt_test/libbtmg 锁版 md5 与此前完全一致;8723ds.ko/rtlbt 固件/rc.local BT 时序全部在位 |
 
 **结论:QUICK_START.md 从零部署→编译→产物验收全链路无误,学员按手册逐条复制即可复现。**
+
+## 6.3 学员实机测试新坑:BOARD 改名漏改导致 openwrt 编译失败(2026-10-22)
+
+用户在本机(Ubuntu 24.04 宿主 + 22.04 容器)按 QUICK_START.md 从零测试,`./build.sh
+openwrt_rootfs -j1` 在 `make world` 开始 3 秒后失败,伴随:
+
+1. `ERROR: please fix package/.../libcedarc_mpp/Makefile`(**无害**,scan.mk 收集
+   阶段对 sun8iw20p1 不支持的 mpp 包 dump 后继续,参考树同样有)
+2. `wifimanager/Config.in:88 recursive dependency detected!`(kconfig 警告,可忽略)
+3. **真正致命**:`The choice between .buildconfig[t113-zgl_board] and
+   defconfig[t113-auto_linux5_10] is different` → target/check Error 1 → world 失败
+
+**根因**:openwrt target 复制后 `t113-zgl_board/Makefile` 的 `BOARD:=`/`BOARDNAME:=`
+还是 `t113-evb1_auto_nand`(适配漏改)。`targetinfo` 扫描认不出 zgl_board 目标
+(生成的 Kconfig 里没有 TARGET_t113_zgl_board),`conf` 读 defconfig 时找不到对应
+目标 → 回退到默认的第一个 target(t113-auto_linux5_10)→ mkcommon 把被重置的
+.config 回写 defconfig → defconfig/.config 双双被污染 → target/check 一致性检查失败。
+
+**修复**(三步,已实测生效):
+
+```shell
+cd <sdk>/openwrt/target/t113/t113-zgl_board
+sed -i 's/^BOARD:=t113-evb1_auto_nand$/BOARD:=t113-zgl_board/; s/^BOARDNAME:=t113-evb1_auto_nand$/BOARDNAME:=t113-zgl_board/' Makefile
+# defconfig 若已被污染(目标变成 auto_linux5_10),从适配好的备份恢复,然后:
+rm -f <sdk>/out/t113/zgl_board/openwrt/.config
+rm -rf <sdk>/out/t113/zgl_board/openwrt/tmp
+# 重新 ./build.sh openwrt_rootfs -j1
+```
+
+修好后递归依赖降级为警告,编译正常进入 tools/packages 阶段。QUICK_START.md 第 6 步
+表格与"遇到问题"表已补充此坑。

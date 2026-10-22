@@ -300,7 +300,7 @@ SDK 拉出来后是 `evb1_auto_nand` 原厂板,需要按 `ZGL_BOARD_Tutorial.md`
 | 教程章节 | 内容 | 涉及 |
 |---|---|---|
 | 创建和配置板级支持包 | `cp -r evb1_auto_nand zgl_board` + machine 改名 | device/config/chips/t113 |
-| 添加 openwrt 支持 | `cp -r t113-evb1_auto_nand t113-zgl_board` + 4 个文件改名/替换 | openwrt/target/t113 |
+| 添加 openwrt 支持 | `cp -r t113-evb1_auto_nand t113-zgl_board` + 4 个文件改名/替换(**Makefile 的 `BOARD:=`/`BOARDNAME:=` 必须改成 t113-zgl_board**——漏改会让 targetinfo 不认识新目标,menuconfig 时 .config 被重置成默认板,编译直接失败) | openwrt/target/t113 |
 | 串口(UART3) | sys_config.fex / board.dts / env.cfg | device + board.dts |
 | MIPI 屏 | st7701sn 驱动新增 + panels/Makefile/Kconfig + dts | kernel |
 | 触摸 | dx_touch 驱动新增 + Kconfig/Makefile + dts | kernel |
@@ -498,6 +498,8 @@ SDK 的 repo 项目清单里不含 `docs/`,编译**不需要**它。外设教程
 |---|---|
 | Docker 拉镜像/apt 失败、死代理 | 本手册第 3 步提示框 + `REPLICATION_LOG.md` §1 |
 | repo sync 报 Queue/formatter/decode/next 错 | 本手册第 5 步补丁是否 4 处都打上(`python3 /tmp/fix_repo.py` 输出核对) |
+| openwrt 编译 `make world` 快速失败,`defconfig`/`.config` 变成 `t113-auto_linux5_10` | 第 6 步 openwrt target 的 `Makefile` 里 `BOARD:=`/`BOARDNAME:=` 没改成 `t113-zgl_board`(改完删 `out/t113/zgl_board/openwrt/.config` 和 `out/.../openwrt/tmp/` 重跑) |
+| openwrt 编译报 wifimanager `recursive dependency detected!` 警告 | **可忽略**(SDK 固有的 kconfig 循环依赖,不阻断编译;已实测警告下编译成功) |
 | 编译报错 | `README.md` 常见问题表 + `REPLICATION_LOG.md` §4(xxd/busybox 等) |
 | 外设不工作 | `ZGL_BOARD_Tutorial.md` 各章"排错速查" + `peripheral/01~07` 详细记录 |
 | 从零复刻遇到的坑全集 | `peripheral/08-replication.md` |
