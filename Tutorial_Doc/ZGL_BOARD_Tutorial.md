@@ -162,6 +162,38 @@ PRODUCT_MAKEFILES := \
     $(LOCAL_DIR)/t113_zgl_board.mk
 ```
 
+修改 `t113-zgl_board/Makefile`(目标板名,**必改**——漏了它 openwrt 扫描认不出
+zgl_board 目标,menuconfig 时 .config 会被重置成默认板,编译直接失败):
+
+```shell
+vi <sdk>/openwrt/target/t113/t113-zgl_board/Makefile
+```
+
+修改内容 —— diff(原值 → 新值,看差异):
+
+```diff
+ ARCH:=arm
+-BOARD:=t113-evb1_auto_nand
+-BOARDNAME:=t113-evb1_auto_nand
++BOARD:=t113-zgl_board
++BOARDNAME:=t113-zgl_board
+ FEATURES:=fpu dt
+ CPU_TYPE:=cortex-a7
+ CPU_SUBTYPE:=neon
+ MAINTAINER:=Allwinner
+```
+
+修改后 `BOARD`/`BOARDNAME` 两行的最终内容(直接复制,替换对应两行):
+
+```shell
+BOARD:=t113-zgl_board
+BOARDNAME:=t113-zgl_board
+```
+
+> 说明:`BOARD` 是 openwrt 目标标识(targetinfo 扫描、defconfig 一致性检查都用它),
+> 必须与目录名 `t113-zgl_board` 和 defconfig 的 `CONFIG_TARGET_BOARD` 一致;
+> 其余行(ARCH/FEATURES/CPU_TYPE/KERNEL_PATCHVER 等)保持模板原样不用动。
+
 修改 `t113-zgl_board/defconfig`(目标名):
 
 ```shell

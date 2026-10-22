@@ -236,3 +236,12 @@ evtest 下载、bootloader)已全部通过 **Ubuntu 22.04 Docker 容器**固化�
 - 使用文档:`docs/build-env/docker/README.md`
 - 实测全记录:`docs/build-env/docker/REPLICATION_LOG.md`
   (从解压原厂 tar 到产出镜像 ~5.5h,关键二进制与宿主直编逐字节一致)
+
+## 附 3:教程勘误(2026-10-22)
+
+`ZGL_BOARD_Tutorial.md` 的"添加 openwrt 文件系统对自定义板卡的支持方案"章节
+最初**漏了** `t113-zgl_board/Makefile` 的 `BOARD:=`/`BOARDNAME:=` 改名步骤
+(参考模板 T113_SDK.md 里有)。漏改后果:openwrt targetinfo 认不出 zgl_board 目标,
+menuconfig 时 .config 被重置成默认板 → defconfig/.config 双双污染 →
+`target/check` 一致性检查失败、`make world` 3 秒失败。已补进教程
+(2026-10-22 版)。
