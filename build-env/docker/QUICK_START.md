@@ -362,6 +362,21 @@ unsquashfs -l ~/t113/sdk/T113-Tina5.0-V1.2/out/t113/zgl_board/openwrt/rootfs.img
 # 预期: 8723ds.ko + rtlbt 4 个固件 + rtk_hciattach + bt_test + libbtmg.so 全部在列
 ```
 
+内核新驱动编进去了吗(可选,强烈建议——漏接线的判据):
+
+```shell
+# boot.img 里的符号(宿主机):
+strings ~/t113/sdk/T113-Tina5.0-V1.2/out/t113/zgl_board/openwrt/uImage | grep -cE "st7701sn|dx_touch"
+# 预期: ≥2(st7701sn_d240n2501v1 和 dx_touch 都在);0 = 内核 Kconfig 接线(panels.c/
+# panels.h/Makefile/Kconfig)没做,Kconfig 新符号会被 merge_config 丢弃,屏和触摸不工作
+```
+
+> **坑(实测 2026-10-22)**:内核 Menuconfig 新符号(config-5.4 加 =y)若对应的
+> Kconfig/Makefile 没接线,`./build.sh kernel` 时 merge_config 会**静默丢弃**这些符号
+> (olddefconfig 语义),编译不报错、镜像正常产出,但驱动不在内核里——板上
+> `/proc/kallsyms | grep st7701sn` 为 0,屏和触摸全部不工作。接线清单见教程
+> "MIPI 屏"章的 5 个文件(panels.c/panels.h/Makefile/Kconfig/驱动 .c)。
+
 ---
 
 ## 第 9 步 烧录(宿主机)

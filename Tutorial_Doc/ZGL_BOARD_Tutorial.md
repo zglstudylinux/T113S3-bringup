@@ -1013,6 +1013,17 @@ vi <sdk>/kernel/linux-5.4/drivers/video/fbdev/sunxi/disp2/disp/dev_fb.c
 
 ##### 内核 Menuconfig 配置
 
+> **前置条件(实测 2026-10-22)**:这里加的 `CONFIG_LCD_SUPPORT_ST7701SN_D240N2501V1=y`
+> 是**新 Kconfig 符号**,必须先完成上面"内核驱动移植"里的全部 5 个接线文件
+> (驱动 .c / panels.c / panels.h / disp Makefile / lcd Kconfig)再编译——
+> Kconfig 没接线时 `./build.sh kernel` 的 merge_config 会**静默丢弃**新符号
+> (不报错、镜像正常产出,但驱动不在内核里,屏幕不显示)。编译后自检:
+>
+> ```shell
+> strings <sdk>/out/t113/zgl_board/openwrt/uImage | grep -c st7701sn
+> # 预期: ≥1;0 = 接线没做,Kconfig 符号被丢
+> ```
+
 板级内核配置直接改 `config-5.4`:
 
 ```shell
